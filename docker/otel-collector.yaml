@@ -1,0 +1,45 @@
+# OTel Collector configuration.
+# Pipelines:
+#   traces:  OTLP/gRPC receiver → batch → Jaeger + debug
+#   metrics: OTLP/gRPC receiver → batch → Prometheus exporter (scraped by Prometheus on :8889)
+#
+# View traces:  http://localhost:16686  (Jaeger)
+# View metrics: http://localhost:9090   (Prometheus)
+# View dashboards: http://localhost:3000 (Grafana)
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+processors:
+  batch:
+    send_batch_size: 512
+    timeout: 5s
+
+exporters:
+  debug:
+    verbosity: normal
+
+  otlp/jaeger:
+    endpoint: "jaeger:4317"
+    tls:
+      insecure: true
+
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug, otlp/jaeger]
+
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]

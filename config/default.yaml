@@ -1,0 +1,124 @@
+simulator:
+  concurrency: 200
+  run_duration_seconds: 300
+  clock_multiplier: 5.0
+  random_seed: 42
+
+agent_profiles:
+  rag_researcher:
+    mix_weight: 3.0
+    tools:
+      - vector_search
+      - reranker
+      - summariser
+    llm_model: "gpt-4o"
+    llm_input_tokens:
+      mean: 1200
+      std: 300
+    llm_output_tokens:
+      mean: 250
+      std: 80
+    planning_latency_ms:
+      mean: 200
+      std: 50
+    tool_call_count:
+      min: 1
+      max: 5
+    failure_rate: 0.05
+
+  code_executor:
+    mix_weight: 2.0
+    tools:
+      - code_interpreter
+      - shell
+      - file_writer
+    llm_model: "gpt-4o"
+    llm_input_tokens:
+      mean: 900
+      std: 200
+    llm_output_tokens:
+      mean: 600
+      std: 150
+    planning_latency_ms:
+      mean: 300
+      std: 80
+    tool_call_count:
+      min: 2
+      max: 8
+    failure_rate: 0.10
+
+  web_scraper:
+    mix_weight: 2.0
+    tools:
+      - http_fetch
+      - html_parser
+      - link_extractor
+    llm_model: "claude-3-sonnet"
+    llm_input_tokens:
+      mean: 800
+      std: 200
+    llm_output_tokens:
+      mean: 150
+      std: 50
+    planning_latency_ms:
+      mean: 100
+      std: 30
+    tool_call_count:
+      min: 3
+      max: 10
+    failure_rate: 0.08
+
+  data_analyst:
+    mix_weight: 2.0
+    tools:
+      - sql_query
+      - dataframe_ops
+      - chart_generator
+    llm_model: "gpt-4o"
+    llm_input_tokens:
+      mean: 3000
+      std: 800
+    llm_output_tokens:
+      mean: 400
+      std: 100
+    planning_latency_ms:
+      mean: 250
+      std: 60
+    tool_call_count:
+      min: 2
+      max: 6
+    failure_rate: 0.04
+
+  api_orchestrator:
+    mix_weight: 1.0
+    tools:
+      - rest_call
+      - auth_handler
+      - response_parser
+    llm_model: "claude-3-haiku"
+    llm_input_tokens:
+      mean: 400
+      std: 100
+    llm_output_tokens:
+      mean: 80
+      std: 30
+    planning_latency_ms:
+      mean: 50
+      std: 15
+    tool_call_count:
+      min: 1
+      max: 4
+    failure_rate: 0.03
+
+scenarios:
+  enabled:
+    tool_timeout: 0.05
+    infinite_retry_loop: 0.03
+    goal_drift: 0.04
+    context_overflow: 0.02
+    silent_failure: 0.04
+
+telemetry:
+  exporter_endpoint: "http://localhost:4317"
+  batch_size: 512
+  export_interval_ms: 5000
