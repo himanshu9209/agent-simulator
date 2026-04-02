@@ -7,6 +7,7 @@ from contextvars import copy_context
 
 from opentelemetry import trace
 
+from simulator.behavior.cost import CostCalculator
 from simulator.behavior.distributions import Distributions
 from simulator.behavior.engine import run_agent_session
 from simulator.clock import ClockController
@@ -35,10 +36,11 @@ async def _run_session_task(
     base_seed: int | None,
     scenario_engine: ScenarioEngine,
     metrics: SimulatorMetrics,
+    cost_calculator: CostCalculator | None,
 ) -> None:
     seed = None if base_seed is None else base_seed + session_index
     dist = Distributions.from_seed(seed)
-    scenario = scenario_engine.select(dist)
+    scenario = scenario_engine.evaluate(profile, dist)
     await run_agent_session(
         profile_name=profile_name,
         profile=profile,
@@ -47,6 +49,7 @@ async def _run_session_task(
         clock=clock,
         scenario=scenario,
         metrics=metrics,
+        cost_calculator=cost_calculator,
     )
 
 
@@ -55,6 +58,7 @@ async def run(config: RootConfig, tracer: trace.Tracer, metrics: SimulatorMetric
     sem = asyncio.Semaphore(config.simulator.concurrency)
     rng = random.Random(config.simulator.random_seed)
     scenario_engine = ScenarioEngine(config.scenarios)
+    cost_calculator = CostCalculator(config.pricing) if config.pricing else None
 
     deadline = time.monotonic() + config.simulator.run_duration_seconds / clock.multiplier
     session_index = 0
@@ -79,6 +83,7 @@ async def run(config: RootConfig, tracer: trace.Tracer, metrics: SimulatorMetric
                     config.simulator.random_seed,
                     scenario_engine,
                     metrics,
+                    cost_calculator,
                 )
 
         task = asyncio.create_task(_guarded())

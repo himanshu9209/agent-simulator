@@ -1,0 +1,88 @@
+# config/schemas/langchain_rag_agent.yaml
+# Pre-built simulator profile for a LangChain RAG (Retrieval-Augmented Generation) pipeline.
+# Derived from real OTel exports of LangChain agents using vector search + reranking.
+# Drop this into agent_profiles in your simulator config, or use it standalone.
+
+simulator:
+  concurrency: 5
+  run_duration_seconds: 60
+  clock_multiplier: 5.0
+
+scenarios:
+  enabled:
+    tool_timeout: 0.05
+    context_overflow: 0.02
+    goal_drift: 0.0   # controlled per-profile below
+
+agent_profiles:
+  langchain_rag_agent:
+    mix_weight: 1.0
+    tools: [vector_search, reranker, summariser]
+    llm_model: "gpt-4o"
+    llm_input_tokens:    {mean: 1200, std: 300}
+    llm_output_tokens:   {mean: 250,  std: 80}
+    planning_latency_ms: {mean: 200,  std: 50}
+    tool_call_count:     {min: 2, max: 5}
+    failure_rate: 0.05
+
+    observability_attributes:
+      session:
+        retrieval.documents.count:  {type: int,   min: 1,   max: 20}
+        retrieval.query.length:     {type: int,   min: 10,  max: 500}
+        vectorstore.type:           {type: enum,  values: [chroma, pinecone, weaviate, pgvector]}
+        chain.type:                 {type: enum,  values: [retrieval_qa, conversational_retrieval, stuff]}
+      tool:
+        retrieval.latency.ms:       {type: float, min: 50.0,  max: 3000.0, mean: 400.0, std: 200.0}
+        chunk.size.tokens:          {type: int,   min: 128,   max: 1024}
+        similarity.score:           {type: float, min: 0.5,   max: 1.0,   mean: 0.82,  std: 0.1}
+      inference:
+        llm.temperature:            {type: float, min: 0.0,  max: 1.0,   mean: 0.3,   std: 0.15}
+        llm.top.p:                  {type: float, min: 0.8,  max: 1.0,   mean: 0.95,  std: 0.04}
+
+    behavioral_signals:
+      tool_selection_quality:
+        type: float
+        span: tool
+        mean: 0.85
+        std: 0.1
+        min: 0.0
+        max: 1.0
+      tool_sequence:
+        enforced: true
+        order: [vector_search, reranker, summariser]
+        deviation_probability: 0.05
+      goal_drift:
+        type: boolean
+        span: session
+        probability: 0.04
+      planning_quality:
+        type: float
+        span: planning
+        mean: 0.82
+        std: 0.12
+        min: 0.0
+        max: 1.0
+      retry_reason:
+        type: enum
+        span: tool
+        values: [rate_limit, timeout, bad_output, network_error]
+        emitted_on_retry: true
+
+telemetry:
+  exporter_endpoint: "http://localhost:4317"
+  batch_size: 512
+  export_interval_ms: 5000
+
+pricing:
+  gpt-4o:
+    input_per_million:        2.50
+    output_per_million:       10.00
+    cached_input_per_million: 1.25
+
+validation:
+  enabled: false
+  real_export_path: null
+  profile_to_validate: null
+  tolerance:
+    value_range_margin: 0.20
+    missing_attribute_threshold: 0.05

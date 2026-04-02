@@ -55,6 +55,16 @@ class SimulatorMetrics:
             "simulator.tool.calls",
             description="Tool calls executed",
         )
+        self._cost_total = meter.create_counter(
+            "agent.cost.total_usd",
+            unit="USD",
+            description="Cumulative LLM cost across all sessions",
+        )
+        self._cost_per_session = meter.create_histogram(
+            "agent.cost.per_session_usd",
+            unit="USD",
+            description="LLM cost distribution per completed session",
+        )
 
     @classmethod
     def from_config(cls, config: RootConfig) -> "SimulatorMetrics":
@@ -91,3 +101,8 @@ class SimulatorMetrics:
         self._session_duration.record(duration_s, attrs)
         if error:
             self._session_errors.add(1, {"agent.profile_type": profile})
+
+    def record_cost(self, session_cost_usd: float, model: str, profile: str) -> None:
+        attrs = {"gen_ai.model": model, "agent.profile_type": profile}
+        self._cost_total.add(session_cost_usd, attrs)
+        self._cost_per_session.record(session_cost_usd, attrs)

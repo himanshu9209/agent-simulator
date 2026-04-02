@@ -37,6 +37,34 @@ agent_profiles:
       inference:
         inference.temperature: {type: float, min: 0.0, max: 1.0}
         inference.top_p:       {type: float, min: 0.8, max: 1.0}
+    behavioral_signals:
+      planning_quality:
+        type: float
+        span: planning
+        mean: 0.85
+        std: 0.10
+        min: 0.0
+        max: 1.0
+      tool_selection_quality:
+        type: float
+        span: tool
+        mean: 0.85
+        std: 0.10
+        min: 0.0
+        max: 1.0
+      tool_sequence:
+        enforced: true
+        order: [vector_search, reranker, summariser]
+        deviation_probability: 0.05
+      goal_drift:
+        type: boolean
+        span: session
+        probability: 0.05
+      retry_reason:
+        type: enum
+        span: tool
+        values: [rate_limit, timeout, bad_output, network_error]
+        emitted_on_retry: true
 
   code_executor:
     mix_weight: 2.0
@@ -68,6 +96,23 @@ agent_profiles:
         execution.memory_mb:  {type: float, min: 10, max: 512}
       inference:
         inference.temperature: {type: float, min: 0.0, max: 0.5}
+    behavioral_signals:
+      tool_selection_quality:
+        type: float
+        span: tool
+        mean: 0.75
+        std: 0.20
+        min: 0.0
+        max: 1.0
+      goal_drift:
+        type: boolean
+        span: session
+        probability: 0.08
+      sandbox_escalation:
+        type: boolean
+        span: tool
+        probability: 0.05
+        description: "Agent switches from local to docker sandbox mid-session"
 
   web_scraper:
     mix_weight: 2.0
@@ -99,6 +144,23 @@ agent_profiles:
         robots.txt.respected: {type: boolean, probability: 0.95}
       inference:
         inference.temperature: {type: float, min: 0.0, max: 1.0}
+    behavioral_signals:
+      tool_selection_quality:
+        type: float
+        span: tool
+        mean: 0.70
+        std: 0.15
+        min: 0.0
+        max: 1.0
+      goal_drift:
+        type: boolean
+        span: session
+        probability: 0.12
+      model_switch:
+        type: boolean
+        span: inference
+        probability: 0.03
+        target_model: "gpt-4o"
 
   data_analyst:
     mix_weight: 2.0
@@ -130,6 +192,25 @@ agent_profiles:
         db.type:             {type: enum,  values: [postgres, bigquery, snowflake]}
       inference:
         inference.temperature: {type: float, min: 0.0, max: 0.3}
+    behavioral_signals:
+      planning_quality:
+        type: float
+        span: planning
+        mean: 0.80
+        std: 0.15
+        min: 0.0
+        max: 1.0
+      tool_selection_quality:
+        type: float
+        span: tool
+        mean: 0.80
+        std: 0.10
+        min: 0.0
+        max: 1.0
+      goal_drift:
+        type: boolean
+        span: session
+        probability: 0.04
 
   api_orchestrator:
     mix_weight: 1.0
@@ -162,6 +243,23 @@ agent_profiles:
         api.cache_hit:    {type: boolean, probability: 0.4}
       inference:
         inference.temperature: {type: float, min: 0.0, max: 0.2}
+    behavioral_signals:
+      planning_quality:
+        type: float
+        span: planning
+        mean: 0.90
+        std: 0.08
+        min: 0.0
+        max: 1.0
+      goal_drift:
+        type: boolean
+        span: session
+        probability: 0.03
+      replanning_triggered:
+        type: boolean
+        span: session
+        probability: 0.12
+        description: "Agent discards original plan and replans mid-session"
 
 scenarios:
   enabled:
@@ -171,7 +269,42 @@ scenarios:
     context_overflow: 0.02
     silent_failure: 0.04
 
+# Prices in USD per 1M tokens. Update here — no code changes required.
+pricing:
+  gpt-4o:
+    input_per_million:        2.50
+    output_per_million:       10.00
+    cached_input_per_million: 1.25
+  gpt-4o-mini:
+    input_per_million:        0.15
+    output_per_million:       0.60
+    cached_input_per_million: 0.075
+  claude-3-sonnet:
+    input_per_million:        3.00
+    output_per_million:       15.00
+    cache_write_per_million:  3.75
+    cache_read_per_million:   0.30
+  claude-3-haiku:
+    input_per_million:        0.25
+    output_per_million:       1.25
+    cache_write_per_million:  0.30
+    cache_read_per_million:   0.03
+  gemini-1.5-pro:
+    input_per_million:        1.25
+    output_per_million:       5.00
+  gemini-1.5-flash:
+    input_per_million:        0.075
+    output_per_million:       0.30
+
 telemetry:
   exporter_endpoint: "http://localhost:4317"
   batch_size: 512
   export_interval_ms: 5000
+
+validation:
+  enabled: false
+  real_export_path: null
+  profile_to_validate: null
+  tolerance:
+    value_range_margin: 0.20
+    missing_attribute_threshold: 0.05

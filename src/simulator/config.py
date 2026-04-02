@@ -57,6 +57,7 @@ class AgentProfile(BaseModel):
     failure_rate: float = Field(ge=0.0, le=1.0, default=0.05)
     mix_weight: float = Field(gt=0.0, default=1.0)
     observability_attributes: SpanAttributeSchema = Field(default_factory=SpanAttributeSchema)
+    behavioral_signals: Optional[BehavioralSignalsSchema] = None
 
 
 class SimulatorConfig(BaseModel):
@@ -77,11 +78,71 @@ class ScenarioConfig(BaseModel):
     enabled: dict[str, float] = Field(default_factory=dict)
 
 
+class BehavioralSignalConfig(BaseModel):
+    """
+    Declares one behavioral signal emitted on a specific span type.
+    Reuses AttributeType so AttributeSampler works on it directly.
+    The extra fields (span, target_model, emitted_on_retry, description)
+    are behavioral metadata; the sampler only reads type/min/max/mean/std/values/probability.
+    """
+    type: AttributeType
+    span: str                               # "session" | "tool" | "inference" | "planning"
+    min: Optional[float] = None
+    max: Optional[float] = None
+    mean: Optional[float] = None
+    std: Optional[float] = None
+    values: Optional[List[Union[str, int]]] = None
+    probability: Optional[float] = None
+    target_model: Optional[str] = None     # for model_switch: which model to escalate to
+    emitted_on_retry: bool = False          # for retry_reason: only emit on retried calls
+    description: Optional[str] = None
+
+
+class ToolSequenceConfig(BaseModel):
+    enforced: bool = False
+    order: List[str] = Field(default_factory=list)
+    deviation_probability: float = 0.0
+
+
+class BehavioralSignalsSchema(BaseModel):
+    tool_selection_quality: Optional[BehavioralSignalConfig] = None
+    tool_sequence:          Optional[ToolSequenceConfig] = None
+    goal_drift:             Optional[BehavioralSignalConfig] = None
+    model_switch:           Optional[BehavioralSignalConfig] = None
+    planning_quality:       Optional[BehavioralSignalConfig] = None
+    retry_reason:           Optional[BehavioralSignalConfig] = None
+    replanning_triggered:   Optional[BehavioralSignalConfig] = None  # mid-session replan
+    sandbox_escalation:     Optional[BehavioralSignalConfig] = None  # sandbox switch
+    extra:                  Dict[str, BehavioralSignalConfig] = Field(default_factory=dict)
+
+
+class ModelPricing(BaseModel):
+    input_per_million:          float
+    output_per_million:         float
+    cached_input_per_million:   Optional[float] = None  # OpenAI prompt caching
+    cache_write_per_million:    Optional[float] = None  # Anthropic cache write
+    cache_read_per_million:     Optional[float] = None  # Anthropic cache read
+
+
+class ValidationToleranceConfig(BaseModel):
+    value_range_margin: float = 0.20
+    missing_attribute_threshold: float = 0.05
+
+
+class ValidationConfig(BaseModel):
+    enabled: bool = False
+    real_export_path: Optional[str] = None
+    profile_to_validate: Optional[str] = None
+    tolerance: ValidationToleranceConfig = Field(default_factory=ValidationToleranceConfig)
+
+
 class RootConfig(BaseModel):
     simulator: SimulatorConfig = Field(default_factory=SimulatorConfig)
     agent_profiles: dict[str, AgentProfile]
     scenarios: ScenarioConfig = Field(default_factory=ScenarioConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
+    pricing: Dict[str, ModelPricing] = Field(default_factory=dict)
+    validation: ValidationConfig = Field(default_factory=ValidationConfig)
 
 
 def load_config(path: str | Path) -> RootConfig:

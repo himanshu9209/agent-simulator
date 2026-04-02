@@ -1,0 +1,90 @@
+# config/schemas/openai_assistants_agent.yaml
+# Pre-built simulator profile for an OpenAI Assistants API agent.
+# Models the thread/run lifecycle: code interpreter, file search, function calling.
+# Derived from real OTel exports of OpenAI Assistants agents.
+
+simulator:
+  concurrency: 5
+  run_duration_seconds: 60
+  clock_multiplier: 5.0
+
+scenarios:
+  enabled:
+    tool_timeout: 0.03
+    context_overflow: 0.04
+    goal_drift: 0.0   # controlled per-profile below
+
+agent_profiles:
+  openai_assistants_agent:
+    mix_weight: 1.0
+    tools: [code_interpreter, file_search, function_call]
+    llm_model: "gpt-4o"
+    llm_input_tokens:    {mean: 900,  std: 250}
+    llm_output_tokens:   {mean: 320,  std: 100}
+    planning_latency_ms: {mean: 180,  std: 45}
+    tool_call_count:     {min: 1, max: 6}
+    failure_rate: 0.04
+
+    observability_attributes:
+      session:
+        run.status:               {type: enum,    values: [completed, requires_action, failed, cancelled]}
+        thread.message.count:     {type: int,     min: 1,   max: 30}
+        response.format:          {type: enum,    values: [text, json_object]}
+      tool:
+        tool.type:                {type: enum,    values: [code_interpreter, file_search, function]}
+        function.call.count:      {type: int,     min: 0,   max: 10}
+        file.search.results:      {type: int,     min: 0,   max: 20}
+      inference:
+        run.model:                {type: enum,    values: [gpt-4o, gpt-4o-mini, gpt-4-turbo]}
+        prompt.tokens.cached:     {type: int,     min: 0,   max: 500}
+
+    behavioral_signals:
+      tool_selection_quality:
+        type: float
+        span: tool
+        mean: 0.88
+        std: 0.08
+        min: 0.0
+        max: 1.0
+      goal_drift:
+        type: boolean
+        span: session
+        probability: 0.03
+      model_switch:
+        type: boolean
+        span: inference
+        probability: 0.02
+        target_model: "gpt-4o"
+      planning_quality:
+        type: float
+        span: planning
+        mean: 0.86
+        std: 0.1
+        min: 0.0
+        max: 1.0
+
+telemetry:
+  exporter_endpoint: "http://localhost:4317"
+  batch_size: 512
+  export_interval_ms: 5000
+
+pricing:
+  gpt-4o:
+    input_per_million:        2.50
+    output_per_million:       10.00
+    cached_input_per_million: 1.25
+  gpt-4o-mini:
+    input_per_million:        0.15
+    output_per_million:       0.60
+    cached_input_per_million: 0.075
+  gpt-4-turbo:
+    input_per_million:        10.00
+    output_per_million:       30.00
+
+validation:
+  enabled: false
+  real_export_path: null
+  profile_to_validate: null
+  tolerance:
+    value_range_margin: 0.20
+    missing_attribute_threshold: 0.05

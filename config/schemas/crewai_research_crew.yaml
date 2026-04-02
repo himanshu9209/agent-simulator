@@ -1,0 +1,93 @@
+# config/schemas/crewai_research_crew.yaml
+# Pre-built simulator profile for a CrewAI research crew.
+# Models a multi-role crew (researcher, analyst, writer) with task delegation.
+# Derived from real OTel exports of CrewAI agents.
+
+simulator:
+  concurrency: 5
+  run_duration_seconds: 60
+  clock_multiplier: 5.0
+
+scenarios:
+  enabled:
+    tool_timeout: 0.05
+    silent_failure: 0.03
+    goal_drift: 0.0   # controlled per-profile below
+
+agent_profiles:
+  crewai_research_crew:
+    mix_weight: 1.0
+    tools: [web_search, scraper, summariser, writer]
+    llm_model: "claude-3-sonnet"
+    llm_input_tokens:    {mean: 2200, std: 600}
+    llm_output_tokens:   {mean: 450,  std: 140}
+    planning_latency_ms: {mean: 320,  std: 80}
+    tool_call_count:     {min: 3, max: 10}
+    failure_rate: 0.07
+
+    observability_attributes:
+      session:
+        crew.agents.count:        {type: int,   min: 2,  max: 6}
+        crew.process:             {type: enum,  values: [sequential, hierarchical]}
+        crew.tasks.count:         {type: int,   min: 2,  max: 8}
+        crew.verbose:             {type: boolean, probability: 0.3}
+      tool:
+        task.priority:            {type: enum,  values: [low, medium, high, critical]}
+        delegation.depth:         {type: int,   min: 0,  max: 3}
+        task.output.quality:      {type: float, min: 0.4, max: 1.0, mean: 0.78, std: 0.12}
+      inference:
+        agent.role:               {type: enum,  values: [researcher, analyst, writer, manager]}
+
+    behavioral_signals:
+      tool_selection_quality:
+        type: float
+        span: tool
+        mean: 0.76
+        std: 0.15
+        min: 0.0
+        max: 1.0
+      tool_sequence:
+        enforced: true
+        order: [web_search, scraper, summariser, writer]
+        deviation_probability: 0.08
+      goal_drift:
+        type: boolean
+        span: session
+        probability: 0.06
+      replanning_triggered:
+        type: boolean
+        span: session
+        probability: 0.12
+        description: "Manager agent reassigns task to different crew member"
+      planning_quality:
+        type: float
+        span: planning
+        mean: 0.80
+        std: 0.13
+        min: 0.0
+        max: 1.0
+      retry_reason:
+        type: enum
+        span: tool
+        values: [rate_limit, timeout, bad_output, delegation_failure]
+        emitted_on_retry: true
+
+telemetry:
+  exporter_endpoint: "http://localhost:4317"
+  batch_size: 512
+  export_interval_ms: 5000
+
+pricing:
+  claude-3-sonnet:
+    input_per_million:        3.00
+    output_per_million:       15.00
+    cache_write_per_million:  3.75
+    cache_read_per_million:   0.30
+
+validation:
+  enabled: false
+  real_export_path: null
+  profile_to_validate: null
+  tolerance:
+    value_range_margin: 0.20
+    missing_attribute_threshold: 0.05
