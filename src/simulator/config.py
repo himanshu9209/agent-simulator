@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Union
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
@@ -23,6 +24,29 @@ class UniformIntDistribution(BaseModel):
         return self
 
 
+class AttributeType(str, Enum):
+    FLOAT   = "float"
+    INT     = "int"
+    ENUM    = "enum"
+    BOOLEAN = "boolean"
+
+
+class AttributeConfig(BaseModel):
+    type: AttributeType
+    min: Optional[float] = None
+    max: Optional[float] = None
+    mean: Optional[float] = None
+    std: Optional[float] = None
+    values: Optional[List[Union[str, int]]] = None
+    probability: Optional[float] = None  # for boolean type
+
+
+class SpanAttributeSchema(BaseModel):
+    session:   Dict[str, AttributeConfig] = Field(default_factory=dict)
+    tool:      Dict[str, AttributeConfig] = Field(default_factory=dict)
+    inference: Dict[str, AttributeConfig] = Field(default_factory=dict)
+
+
 class AgentProfile(BaseModel):
     tools: list[str]
     llm_model: str = "gpt-4o"
@@ -32,6 +56,7 @@ class AgentProfile(BaseModel):
     tool_call_count: UniformIntDistribution
     failure_rate: float = Field(ge=0.0, le=1.0, default=0.05)
     mix_weight: float = Field(gt=0.0, default=1.0)
+    observability_attributes: SpanAttributeSchema = Field(default_factory=SpanAttributeSchema)
 
 
 class SimulatorConfig(BaseModel):
@@ -61,5 +86,9 @@ class RootConfig(BaseModel):
 
 def load_config(path: str | Path) -> RootConfig:
     """Load and validate a YAML config file, returning a RootConfig instance."""
+    from simulator.telemetry.attributes import AttributeSchemaValidator
+
     raw: dict[str, Any] = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    return RootConfig.model_validate(raw)
+    config = RootConfig.model_validate(raw)
+    AttributeSchemaValidator().validate_profile_schemas(config.agent_profiles)
+    return config

@@ -32,3 +32,6 @@ docker/volumes/
 
 # Local config overrides — don't commit personal settings
 config/local.yaml
+
+# Work log files
+work_done_*.MD

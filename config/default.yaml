@@ -25,6 +25,18 @@ agent_profiles:
       min: 1
       max: 5
     failure_rate: 0.05
+    observability_attributes:
+      session:
+        retrieval.score:    {type: float,   min: 0.6,  max: 1.0}
+        chunks.returned:    {type: int,     min: 1,    max: 20}
+        reranker.model:     {type: enum,    values: [cohere-v3, bge-reranker]}
+        index.name:         {type: enum,    values: [prod-index, staging-index]}
+      tool:
+        tool.input_size_kb: {type: float,   min: 0.5,  max: 50.0}
+        tool.cache_hit:     {type: boolean, probability: 0.3}
+      inference:
+        inference.temperature: {type: float, min: 0.0, max: 1.0}
+        inference.top_p:       {type: float, min: 0.8, max: 1.0}
 
   code_executor:
     mix_weight: 2.0
@@ -46,6 +58,16 @@ agent_profiles:
       min: 2
       max: 8
     failure_rate: 0.10
+    observability_attributes:
+      session:
+        execution.language: {type: enum,  values: [python, javascript, bash]}
+        sandbox.type:       {type: enum,  values: [docker, e2b, local]}
+      tool:
+        execution.exit_code:  {type: int,   values: [0, 1, 2]}
+        execution.runtime_ms: {type: float, min: 10, max: 5000}
+        execution.memory_mb:  {type: float, min: 10, max: 512}
+      inference:
+        inference.temperature: {type: float, min: 0.0, max: 0.5}
 
   web_scraper:
     mix_weight: 2.0
@@ -67,6 +89,16 @@ agent_profiles:
       min: 3
       max: 10
     failure_rate: 0.08
+    observability_attributes:
+      session:
+        pages.scraped:    {type: int,   min: 1,   max: 20}
+        content.size_kb:  {type: float, min: 1.0, max: 500.0}
+      tool:
+        http.status_code:     {type: enum,    values: [200, 301, 404, 429, 503]}
+        http.response_ms:     {type: float,   min: 50,  max: 3000}
+        robots.txt.respected: {type: boolean, probability: 0.95}
+      inference:
+        inference.temperature: {type: float, min: 0.0, max: 1.0}
 
   data_analyst:
     mix_weight: 2.0
@@ -88,6 +120,16 @@ agent_profiles:
       min: 2
       max: 6
     failure_rate: 0.04
+    observability_attributes:
+      session:
+        rows.processed:   {type: int,  min: 100,  max: 1000000}
+        query.complexity: {type: enum, values: [simple, moderate, complex]}
+      tool:
+        query.execution_ms:  {type: float, min: 10,  max: 10000}
+        query.rows_returned: {type: int,   min: 0,   max: 100000}
+        db.type:             {type: enum,  values: [postgres, bigquery, snowflake]}
+      inference:
+        inference.temperature: {type: float, min: 0.0, max: 0.3}
 
   api_orchestrator:
     mix_weight: 1.0
@@ -109,6 +151,17 @@ agent_profiles:
       min: 1
       max: 4
     failure_rate: 0.03
+    observability_attributes:
+      session:
+        api.calls_made:   {type: int,  min: 1,  max: 20}
+        auth.method:      {type: enum, values: [oauth2, api_key, basic]}
+      tool:
+        http.status_code: {type: enum,    values: [200, 201, 400, 401, 429, 500]}
+        http.response_ms: {type: float,   min: 10, max: 2000}
+        api.retry_count:  {type: int,     min: 0,  max: 3}
+        api.cache_hit:    {type: boolean, probability: 0.4}
+      inference:
+        inference.temperature: {type: float, min: 0.0, max: 0.2}
 
 scenarios:
   enabled:

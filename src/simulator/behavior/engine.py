@@ -7,10 +7,13 @@ from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from simulator.behavior.distributions import Distributions
+from simulator.behavior.sampler import AttributeSampler
 from simulator.clock import ClockController
 from simulator.config import AgentProfile
 from simulator.scenarios.types import ScenarioType
 from simulator.telemetry import attributes as A
+
+_SAMPLER = AttributeSampler()
 
 
 AGENT_GOALS = [
@@ -60,6 +63,9 @@ async def run_agent_session(
         kind=SpanKind.SERVER,
         attributes=session_attrs,
     ) as session_span:
+
+        for attr_name, attr_cfg in profile.observability_attributes.session.items():
+            session_span.set_attribute(attr_name, _SAMPLER.sample(attr_cfg, dist._rng))
 
         with tracer.start_as_current_span(
             "agent.planning",
@@ -114,6 +120,9 @@ async def run_agent_session(
                 )
                 await clock.scaled_sleep(tool_latency_ms / 1000.0)
 
+                for attr_name, attr_cfg in profile.observability_attributes.tool.items():
+                    tool_span.set_attribute(attr_name, _SAMPLER.sample(attr_cfg, dist._rng))
+
                 input_tokens = dist.gaussian_int(profile.llm_input_tokens)
                 output_tokens = dist.gaussian_int(profile.llm_output_tokens)
 
@@ -130,8 +139,10 @@ async def run_agent_session(
                         A.GEN_AI_OUTPUT_TOKENS: output_tokens,
                         A.AGENT_ID: agent_id,
                     },
-                ):
+                ) as inference_span:
                     llm_start = time.monotonic()
+                    for attr_name, attr_cfg in profile.observability_attributes.inference.items():
+                        inference_span.set_attribute(attr_name, _SAMPLER.sample(attr_cfg, dist._rng))
                     await clock.scaled_sleep(output_tokens * 5.0 / 1000.0)
 
                     if metrics:
