@@ -66,6 +66,24 @@ class SimulatorMetrics:
             description="LLM cost distribution per completed session",
         )
 
+        # Behavioral signal metrics (Phase 6)
+        self._sessions_completed = meter.create_counter(
+            "agent.sessions.completed",
+            description="Total agent sessions successfully completed",
+        )
+        self._goal_drifts = meter.create_counter(
+            "agent.behavior.goal_drifts",
+            description="Goal drift events detected across all sessions",
+        )
+        self._model_switches = meter.create_counter(
+            "agent.behavior.model_switches",
+            description="Model escalation events (agent switched to a more capable model)",
+        )
+        self._tool_quality = meter.create_histogram(
+            "agent.behavior.tool_quality",
+            description="Tool selection quality score distribution (0.0–1.0)",
+        )
+
     @classmethod
     def from_config(cls, config: RootConfig) -> "SimulatorMetrics":
         meter = metrics.get_meter("agent-simulator")
@@ -106,3 +124,15 @@ class SimulatorMetrics:
         attrs = {"gen_ai.model": model, "agent.profile_type": profile}
         self._cost_total.add(session_cost_usd, attrs)
         self._cost_per_session.record(session_cost_usd, attrs)
+
+    def record_session_completed(self, profile: str) -> None:
+        self._sessions_completed.add(1, {"agent.profile_type": profile})
+
+    def record_goal_drift(self, profile: str) -> None:
+        self._goal_drifts.add(1, {"agent.profile_type": profile})
+
+    def record_model_switch(self, profile: str, model: str) -> None:
+        self._model_switches.add(1, {"agent.profile_type": profile, "gen_ai.model": model})
+
+    def record_tool_quality(self, quality: float, profile: str) -> None:
+        self._tool_quality.record(quality, {"agent.profile_type": profile})

@@ -1,6 +1,6 @@
 simulator:
   concurrency: 200
-  run_duration_seconds: 300
+  run_duration_seconds: 600
   clock_multiplier: 5.0
   random_seed: 42
 

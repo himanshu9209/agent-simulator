@@ -57,6 +57,8 @@ async def run_agent_session(
         if dist.bernoulli(bs.model_switch.probability or 0.0):
             active_model = bs.model_switch.target_model or profile.llm_model
             model_switched = True
+            if metrics:
+                metrics.record_model_switch(profile_name, active_model)
 
     if scenario == ScenarioType.INFINITE_RETRY_LOOP:
         tool_count = dist.randint(10, 20)
@@ -94,6 +96,8 @@ async def run_agent_session(
                     "session.original_goal": goal,
                     "session.final_goal": drifted,
                 })
+                if metrics:
+                    metrics.record_goal_drift(profile_name)
 
         # Replanning triggered (e.g. api_orchestrator discards plan mid-session).
         if bs and bs.replanning_triggered:
@@ -177,6 +181,8 @@ async def run_agent_session(
                 if bs and bs.tool_selection_quality:
                     quality = _SAMPLER.sample(bs.tool_selection_quality, dist._rng)  # type: ignore[arg-type]
                     tool_span.set_attribute("tool.selection_quality", quality)
+                    if metrics:
+                        metrics.record_tool_quality(float(quality), profile_name)
                 if bs and bs.sandbox_escalation:
                     if dist.bernoulli(bs.sandbox_escalation.probability or 0.0):
                         tool_span.set_attribute("tool.sandbox_escalation", True)
@@ -278,5 +284,6 @@ async def run_agent_session(
             elapsed, profile_name,
             scenario.value if scenario else None, error=session_error
         )
+        metrics.record_session_completed(profile_name)
         if cost_calculator:
             metrics.record_cost(session_total_cost, active_model, profile_name)
