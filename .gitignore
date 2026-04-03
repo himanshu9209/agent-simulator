@@ -37,3 +37,6 @@ config/local.yaml
 work_done_*.MD
 CLAUDE.md
 CLAUDE_hist.md
+improvements.txt
+PHASE_7_8_DESIGN.MD
+.claude/settings.local.json

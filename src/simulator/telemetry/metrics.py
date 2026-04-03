@@ -11,9 +11,17 @@ from simulator.telemetry.emitter import _RESOURCE
 
 
 def build_meter_provider(config: RootConfig) -> MeterProvider:
+    from simulator.telemetry.emitter import _resolve_headers
+
+    headers = (
+        _resolve_headers(config.telemetry.headers)
+        if config.telemetry.headers
+        else None
+    )
     exporter = OTLPMetricExporter(
         endpoint=config.telemetry.exporter_endpoint,
-        insecure=True,
+        insecure=config.telemetry.tls.insecure,
+        headers=headers,
     )
     reader = PeriodicExportingMetricReader(
         exporter,

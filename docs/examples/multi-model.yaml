@@ -1,0 +1,68 @@
+# Multi-model config — compares cost and latency across three models.
+# Each profile uses a different model; the cost dashboard will show a
+# per-model cost breakdown making it easy to compare value.
+#
+# Usage:
+#   agent-simulator -c docs/examples/multi-model.yaml
+
+simulator:
+  concurrency: 30
+  run_duration_seconds: 300
+  clock_multiplier: 3.0
+  random_seed: 42
+
+agent_profiles:
+
+  gpt4o_agent:
+    mix_weight: 1.0
+    tools: [vector_search, reranker, summariser]
+    llm_model: "gpt-4o"
+    llm_input_tokens:   {mean: 1200, std: 300}
+    llm_output_tokens:  {mean: 250,  std: 80}
+    planning_latency_ms: {mean: 200, std: 50}
+    tool_call_count:    {min: 2, max: 5}
+    failure_rate: 0.04
+    observability_attributes:
+      inference:
+        inference.temperature: {type: float, min: 0.0, max: 1.0}
+
+  gpt4o_mini_agent:
+    mix_weight: 2.0        # twice as likely — cheaper model used more
+    tools: [search, classify]
+    llm_model: "gpt-4o-mini"
+    llm_input_tokens:   {mean: 600, std: 150}
+    llm_output_tokens:  {mean: 120, std: 40}
+    planning_latency_ms: {mean: 80, std: 20}
+    tool_call_count:    {min: 1, max: 3}
+    failure_rate: 0.06
+    observability_attributes:
+      inference:
+        inference.temperature: {type: float, min: 0.0, max: 0.7}
+
+  claude_agent:
+    mix_weight: 1.0
+    tools: [web_fetch, html_parser, summariser]
+    llm_model: "claude-3-sonnet"
+    llm_input_tokens:   {mean: 800, std: 200}
+    llm_output_tokens:  {mean: 200, std: 60}
+    planning_latency_ms: {mean: 150, std: 40}
+    tool_call_count:    {min: 2, max: 6}
+    failure_rate: 0.05
+
+pricing:
+  gpt-4o:
+    input_per_million:        2.50
+    output_per_million:       10.00
+    cached_input_per_million: 1.25
+  gpt-4o-mini:
+    input_per_million:        0.15
+    output_per_million:       0.60
+    cached_input_per_million: 0.075
+  claude-3-sonnet:
+    input_per_million:        3.00
+    output_per_million:       15.00
+    cache_write_per_million:  3.75
+    cache_read_per_million:   0.30
+
+telemetry:
+  exporter_endpoint: "http://localhost:4317"

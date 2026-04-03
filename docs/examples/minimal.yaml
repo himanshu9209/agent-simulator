@@ -1,0 +1,38 @@
+# Minimal config — one profile, 5 agents, 30 seconds.
+# Good for smoke-testing a new OTel Collector or Jaeger setup.
+#
+# Usage:
+#   agent-simulator -c docs/examples/minimal.yaml --dry-run
+#   agent-simulator -c docs/examples/minimal.yaml
+
+simulator:
+  concurrency: 5
+  run_duration_seconds: 30
+  clock_multiplier: 1.0
+  random_seed: 1
+
+agent_profiles:
+  simple_agent:
+    tools: [search, summarise]
+    llm_model: "gpt-4o"
+    llm_input_tokens:
+      mean: 500
+      std: 100
+    llm_output_tokens:
+      mean: 150
+      std: 40
+    planning_latency_ms:
+      mean: 100
+      std: 20
+    tool_call_count:
+      min: 1
+      max: 3
+    failure_rate: 0.05
+
+pricing:
+  gpt-4o:
+    input_per_million:  2.50
+    output_per_million: 10.00
+
+telemetry:
+  exporter_endpoint: "http://localhost:4317"

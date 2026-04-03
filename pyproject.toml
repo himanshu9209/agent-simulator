@@ -4,16 +4,34 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-simulator"
-version = "0.1.0"
-description = "Synthetic OTel telemetry generator for AI agent observability"
+version = "2.0.0"
+description = "Schema-driven OTel telemetry generator for AI agent observability"
+readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.11"
+keywords = ["opentelemetry", "observability", "ai-agents", "testing", "telemetry"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "Topic :: System :: Monitoring",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
 dependencies = [
     "opentelemetry-api>=1.27.0",
     "opentelemetry-sdk>=1.27.0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
     "pydantic>=2.9.0",
     "pyyaml>=6.0.2",
+    "numpy>=1.26.0",
 ]
+
+[project.scripts]
+agent-simulator        = "simulator.cli:main"
+agent-simulator-validate = "tools.validate:main"
+agent-simulator-schema   = "tools.schema_generator:main"
 
 [project.optional-dependencies]
 dev = [

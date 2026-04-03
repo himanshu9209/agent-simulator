@@ -67,10 +67,19 @@ class SimulatorConfig(BaseModel):
     random_seed: int | None = None
 
 
+class TlsConfig(BaseModel):
+    """TLS / mTLS settings for the OTLP exporter."""
+    insecure: bool = True            # set False for TLS-enabled endpoints
+    cert_file: Optional[str] = None  # path to client cert for mTLS
+
+
 class TelemetryConfig(BaseModel):
     exporter_endpoint: str = "http://localhost:4317"
     batch_size: int = Field(ge=1, default=512)
     export_interval_ms: int = Field(ge=100, default=5000)
+    # Auth headers — values may use ${ENV_VAR} syntax resolved at startup
+    headers: Dict[str, str] = Field(default_factory=dict)
+    tls: TlsConfig = Field(default_factory=TlsConfig)
 
 
 class ScenarioConfig(BaseModel):

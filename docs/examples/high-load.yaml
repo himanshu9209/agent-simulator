@@ -1,0 +1,150 @@
+# High-load stress test — 200 agents, 10 minutes, 5x clock.
+# Completes in ~2 minutes real time.
+# Target: 2,000–5,000 spans/second.
+#
+# Usage:
+#   agent-simulator -c docs/examples/high-load.yaml
+
+simulator:
+  concurrency: 200
+  run_duration_seconds: 600
+  clock_multiplier: 5.0
+  random_seed: 42
+
+agent_profiles:
+
+  rag_researcher:
+    mix_weight: 3.0
+    tools: [vector_search, reranker, summariser]
+    llm_model: "gpt-4o"
+    llm_input_tokens:    {mean: 1200, std: 300}
+    llm_output_tokens:   {mean: 250,  std: 80}
+    planning_latency_ms: {mean: 200,  std: 50}
+    tool_call_count:     {min: 1, max: 5}
+    failure_rate: 0.05
+    observability_attributes:
+      session:
+        retrieval.score:   {type: float, min: 0.6,  max: 1.0}
+        chunks.returned:   {type: int,   min: 1,    max: 20}
+        reranker.model:    {type: enum,  values: [cohere-v3, bge-reranker]}
+      tool:
+        tool.input_size_kb: {type: float, min: 0.5, max: 50.0}
+        tool.cache_hit:     {type: boolean, probability: 0.3}
+      inference:
+        inference.temperature: {type: float, min: 0.0, max: 1.0}
+    behavioral_signals:
+      tool_selection_quality:
+        type: float
+        mean: 0.85
+        std: 0.1
+        min: 0.0
+        max: 1.0
+        span: tool
+      goal_drift:
+        type: boolean
+        probability: 0.05
+        span: session
+
+  code_executor:
+    mix_weight: 2.0
+    tools: [code_interpreter, file_reader, shell_exec]
+    llm_model: "gpt-4o"
+    llm_input_tokens:    {mean: 800,  std: 200}
+    llm_output_tokens:   {mean: 600,  std: 150}
+    planning_latency_ms: {mean: 150,  std: 40}
+    tool_call_count:     {min: 1, max: 4}
+    failure_rate: 0.08
+    observability_attributes:
+      session:
+        execution.language: {type: enum, values: [python, javascript, bash]}
+        sandbox.type:       {type: enum, values: [docker, e2b, local]}
+      tool:
+        execution.exit_code:  {type: int,   values: [0, 1, 2]}
+        execution.runtime_ms: {type: float, min: 10, max: 5000}
+    behavioral_signals:
+      goal_drift:
+        type: boolean
+        probability: 0.08
+        span: session
+
+  web_scraper:
+    mix_weight: 2.0
+    tools: [web_fetch, html_parser, link_extractor]
+    llm_model: "claude-3-sonnet"
+    llm_input_tokens:    {mean: 600,  std: 150}
+    llm_output_tokens:   {mean: 180,  std: 60}
+    planning_latency_ms: {mean: 100,  std: 30}
+    tool_call_count:     {min: 2, max: 8}
+    failure_rate: 0.12
+    observability_attributes:
+      session:
+        pages.scraped:    {type: int,   min: 1, max: 20}
+        content.size_kb:  {type: float, min: 1.0, max: 500.0}
+      tool:
+        http.status_code: {type: enum,  values: [200, 301, 404, 429, 503]}
+        http.response_ms: {type: float, min: 50, max: 3000}
+
+  data_analyst:
+    mix_weight: 1.5
+    tools: [sql_query, dataframe_op, chart_renderer]
+    llm_model: "gpt-4o"
+    llm_input_tokens:    {mean: 1500, std: 400}
+    llm_output_tokens:   {mean: 300,  std: 100}
+    planning_latency_ms: {mean: 250,  std: 60}
+    tool_call_count:     {min: 1, max: 6}
+    failure_rate: 0.04
+    behavioral_signals:
+      planning_quality:
+        type: float
+        mean: 0.85
+        std: 0.1
+        min: 0.0
+        max: 1.0
+        span: planning
+
+  task_planner:
+    mix_weight: 1.5
+    tools: [goal_decomposer, task_scheduler, dependency_resolver]
+    llm_model: "claude-3-sonnet"
+    llm_input_tokens:    {mean: 2000, std: 500}
+    llm_output_tokens:   {mean: 400,  std: 120}
+    planning_latency_ms: {mean: 300,  std: 80}
+    tool_call_count:     {min: 2, max: 6}
+    failure_rate: 0.03
+    behavioral_signals:
+      planning_quality:
+        type: float
+        mean: 0.90
+        std: 0.08
+        min: 0.0
+        max: 1.0
+        span: planning
+      replanning_triggered:
+        type: boolean
+        probability: 0.12
+        span: session
+
+pricing:
+  gpt-4o:
+    input_per_million:        2.50
+    output_per_million:       10.00
+    cached_input_per_million: 1.25
+  gpt-4o-mini:
+    input_per_million:        0.15
+    output_per_million:       0.60
+  claude-3-sonnet:
+    input_per_million:        3.00
+    output_per_million:       15.00
+    cache_write_per_million:  3.75
+    cache_read_per_million:   0.30
+
+scenarios:
+  enabled:
+    tool_timeout:        0.03
+    context_overflow:    0.02
+    silent_failure:      0.01
+
+telemetry:
+  exporter_endpoint: "http://localhost:4317"
+  batch_size: 512
+  export_interval_ms: 5000

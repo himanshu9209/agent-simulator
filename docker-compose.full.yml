@@ -1,0 +1,102 @@
+# Agent Simulator — full stack (simulator + observability)
+#
+# Starts everything in one command from the project root:
+#   docker compose -f docker-compose.full.yml up -d
+#
+# Then open:
+#   Jaeger:      http://localhost:16686
+#   Grafana:     http://localhost:3000
+#   Prometheus:  http://localhost:9090
+#
+# To run the simulator against a custom config, mount it:
+#   docker compose -f docker-compose.full.yml run simulator \
+#       --config /app/config/my_agent.yaml
+#
+# Environment variables forwarded to simulator:
+#   HONEYCOMB_API_KEY  — used when config headers reference ${HONEYCOMB_API_KEY}
+#   OTEL_ENDPOINT      — overrides the OTLP endpoint at runtime
+
+services:
+
+  # ----------------------------------------------------------------
+  # Tracing backend
+  # ----------------------------------------------------------------
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: agent-sim-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317"          # OTLP/gRPC (internal — collector → jaeger)
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------
+  # OTel Collector — receives spans/metrics from the simulator
+  # ----------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    container_name: agent-sim-otel-collector
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ./docker/otel-collector.yaml:/etc/otel-collector.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP/gRPC  ← simulator connects here
+      - "4318:4318"   # OTLP/HTTP
+      - "8889:8889"   # Prometheus scrape endpoint
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------
+  # Metrics storage
+  # ----------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: agent-sim-prometheus
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------
+  # Dashboards
+  # ----------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: agent-sim-grafana
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------
+  # Simulator — runs once then exits (restart: no)
+  # ----------------------------------------------------------------
+  simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agent-sim-simulator
+    environment:
+      # Forward any auth credentials set in the shell environment
+      - HONEYCOMB_API_KEY=${HONEYCOMB_API_KEY:-}
+      - OTEL_ENDPOINT=${OTEL_ENDPOINT:-}
+    volumes:
+      # Mount config directory so users can edit YAML without rebuilding
+      - ./config:/app/config:ro
+    depends_on:
+      - otel-collector
+    restart: "no"
+    # Default command — override with `docker compose run simulator --config ...`
+    command: ["--config", "config/default.yaml"]
