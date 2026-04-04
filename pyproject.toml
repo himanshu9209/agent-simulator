@@ -26,6 +26,10 @@ dependencies = [
     "pydantic>=2.9.0",
     "pyyaml>=6.0.2",
     "numpy>=1.26.0",
+    # Phase 8a — REST + WebSocket API
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "websockets>=13.0",
 ]
 
 [project.scripts]
@@ -37,6 +41,7 @@ agent-simulator-schema   = "tools.schema_generator:main"
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
 ]
 
 [tool.hatch.build.targets.wheel]
