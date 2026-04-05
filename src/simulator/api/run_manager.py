@@ -100,16 +100,34 @@ class RunManager:
         Sets self.status to 'idle' on clean exit or 'error' on exception.
         """
         try:
+            import os
+
             from simulator.telemetry.emitter import build_tracer_provider, get_tracer
             from simulator.telemetry.metrics import build_meter_provider
             from simulator.core import run
 
-            self._tracer_provider = build_tracer_provider(self._cfg)
-            self._meter_provider = build_meter_provider(self._cfg)
-            tracer = get_tracer()
-            self._stats = StatsCollector.from_config(self._cfg)
+            # Allow the Docker Compose environment to override the OTLP
+            # endpoint without editing config files.  The env var is set to
+            # http://otel-collector:4317 in the simulator-api service so the
+            # in-process simulator can reach the collector over the Docker
+            # bridge network rather than trying localhost:4317.
+            cfg = self._cfg
+            otlp_override = os.environ.get("SIMULATOR_OTLP_ENDPOINT")
+            if otlp_override:
+                cfg = cfg.model_copy(
+                    update={
+                        "telemetry": cfg.telemetry.model_copy(
+                            update={"exporter_endpoint": otlp_override}
+                        )
+                    }
+                )
 
-            run_task = asyncio.create_task(run(self._cfg, tracer, self._stats))
+            self._tracer_provider = build_tracer_provider(cfg)
+            self._meter_provider = build_meter_provider(cfg)
+            tracer = get_tracer()
+            self._stats = StatsCollector.from_config(cfg)
+
+            run_task = asyncio.create_task(run(cfg, tracer, self._stats))
             stop_task = asyncio.create_task(self._stop_event.wait())
 
             done, _ = await asyncio.wait(

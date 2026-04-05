@@ -1,0 +1,33 @@
+# Python build artefacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# Test / coverage artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node — CRITICAL: exclude node_modules from build context or the
+# UI build stage will send hundreds of MB to the daemon unnecessarily.
+ui/node_modules/
+ui/dist/
+
+# Docker config backups
+config/.backups/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Git history (not needed in image)
+.git/

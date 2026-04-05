@@ -1,0 +1,41 @@
+# Agent Simulator — UI container  (Phase 8c)
+#
+# Multi-stage build:
+#   Stage 1 (builder) — Node.js: install deps and run `vite build`
+#   Stage 2 (serve)   — nginx:   serve the /dist output on port 8080
+#
+# Build (from project root):
+#   docker build -f Dockerfile.ui -t agent-simulator-ui:latest .
+#
+# The resulting image is ~25 MB (nginx:alpine base).
+# nginx.conf proxies /api → http://simulator-api:8000 so the UI and
+# API can live as separate containers on the same Docker network.
+
+# ─── Stage 1: build ──────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy manifests first so npm ci layer is cached on code-only changes
+COPY ui/package.json ui/package-lock.json ./
+
+RUN npm ci
+
+# Copy the full UI source tree (node_modules excluded via .dockerignore)
+COPY ui/ ./
+
+# Produce the production bundle in /app/dist
+RUN npm run build
+
+# ─── Stage 2: serve ──────────────────────────────────────────────────────────
+FROM nginx:alpine
+
+# Copy compiled assets from the builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Replace the default nginx vhost with our proxy + SPA config
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 8080
+
+# nginx image already has a default CMD of ["nginx", "-g", "daemon off;"]

@@ -471,44 +471,17 @@ Use them as starting points without needing to export real traces first.
 
 ## Docker stack
 
-### Full Web UI stack (recommended — Phase 8c)
-
-Brings up all six services in one command: the React UI, the FastAPI backend, Jaeger, OTel Collector, Prometheus, and Grafana. No Python or Node.js installation required.
-
-```bash
-docker compose -f docker/docker-compose.yml up -d --build
-```
-
-The `--build` flag compiles the React app and installs Python dependencies on first run (takes 2–3 minutes). Subsequent starts use Docker layer cache and are near-instant.
-
-Once running, open **http://localhost:8080** in your browser. The full UI is available: create and edit profiles with forms, adjust behavioral signal probabilities with sliders, start and stop simulation runs, and watch live span counts and cost metrics update in real time — without touching a YAML file or a terminal.
-
-Any profile edits you save through the UI are written back to `config/default.yaml` on your local disk (via a Docker volume mount) and survive container restarts.
-
-```bash
-# Stop the stack
-docker compose -f docker/docker-compose.yml down
-
-# View logs from all services
-docker compose -f docker/docker-compose.yml logs -f
-
-# View logs from a specific service
-docker compose -f docker/docker-compose.yml logs -f simulator-api
-```
-
-### Observability-only stack (Phases 1–7, CLI workflow)
-
-If you prefer running the simulator from the command line rather than the browser UI, you can start just the observability backend:
+### Development stack (observability only)
 
 ```bash
 # Start Jaeger, OTel Collector, Prometheus, Grafana
-docker compose -f docker/docker-compose.yml up -d jaeger otel-collector prometheus grafana
+docker compose -f docker/docker-compose.yml up -d
 
 # Run simulator from local Python
 agent-simulator
 ```
 
-### Classic full stack (simulator CLI + observability)
+### Full stack (simulator + observability)
 
 ```bash
 # Start everything — simulator runs once then exits
@@ -527,181 +500,10 @@ docker compose -f docker-compose.full.yml run simulator \
 
 | Service | URL | Purpose |
 |---------|-----|---------|
-| **Agent Sim UI** | **http://localhost:8080** | Browser UI — profiles, run control, live stats |
-| **Agent Sim API** | **http://localhost:8000** | REST + WebSocket backend (also callable directly) |
 | Jaeger | http://localhost:16686 | Trace explorer |
 | Grafana | http://localhost:3000 | Pre-built dashboards (no login) |
 | Prometheus | http://localhost:9090 | Metrics query |
 | OTLP/gRPC | localhost:4317 | Collector ingestion point |
-
----
-
-## Web UI (Phase 8)
-
-Phase 8 adds a browser-based interface that lets you configure the simulator, manage agent profiles, and monitor live runs without ever editing YAML or using the terminal. It is built on a FastAPI backend (Phase 8a) and a React + TypeScript frontend (Phase 8b), packaged into Docker containers that join the existing observability stack (Phase 8c).
-
-### Starting the Web UI
-
-**With Docker (recommended):**
-```bash
-docker compose -f docker/docker-compose.yml up -d --build
-# Open http://localhost:8080
-```
-
-**Without Docker (development):**
-```bash
-# Terminal 1 — start the API
-uvicorn simulator.api.main:app --port 8000 --reload
-
-# Terminal 2 — start the frontend dev server
-cd ui && npm install && npm run dev
-# Open http://localhost:5173
-```
-
----
-
-### REST API (Phase 8a)
-
-The FastAPI backend at `http://localhost:8000` exposes the full simulator over HTTP. You can call it directly from scripts, Postman, or any HTTP client — the browser UI is just one consumer.
-
-Interactive API docs are available at **http://localhost:8000/docs** (Swagger UI) and **http://localhost:8000/redoc**.
-
-**Profile endpoints** — create, read, update, and delete agent profiles stored in `config/default.yaml`:
-
-```
-GET    /api/profiles           List all profiles (summary view)
-GET    /api/profiles/{name}    Get a single profile (full detail)
-POST   /api/profiles           Create a new profile
-PUT    /api/profiles/{name}    Update an existing profile
-DELETE /api/profiles/{name}    Delete a profile
-```
-
-**Config endpoints** — read and write the raw YAML config file with server-side validation. The server never writes a config that fails Pydantic validation, and keeps the last five backups in `config/.backups/` automatically:
-
-```
-GET  /api/config          Read full config/default.yaml as a string
-PUT  /api/config          Validate and overwrite config/default.yaml
-POST /api/config/validate Validate YAML without writing (returns error list)
-```
-
-**Run endpoints** — start and stop the simulator, poll its status, or stream live stats over WebSocket:
-
-```
-POST /api/run/start   Start a simulation (optional: override duration, concurrency, profile)
-POST /api/run/stop    Send a graceful stop signal
-GET  /api/run/status  Snapshot of current run stats
-WS   /api/run/stream  WebSocket — pushes a RunStatus JSON frame every second
-```
-
-**Pricing endpoint** — read and update the model pricing table without editing YAML:
-
-```
-GET /api/pricing   Read current pricing table
-PUT /api/pricing   Replace pricing table
-```
-
-**Example — start a 60-second run targeting a single profile:**
-
-```bash
-curl -X POST http://localhost:8000/api/run/start \
-  -H "Content-Type: application/json" \
-  -d '{"duration": 60, "profile": "rag_researcher"}'
-```
-
-**Example — validate a YAML string before saving:**
-
-```bash
-curl -X POST http://localhost:8000/api/config/validate \
-  -H "Content-Type: application/json" \
-  -d '{"yaml_str": "simulator:\n  concurrency: 10\n..."}'
-```
-
-**`SIMULATOR_CONFIG_PATH` environment variable** — override the config file path at startup (default: `config/default.yaml`):
-
-```bash
-SIMULATOR_CONFIG_PATH=config/production.yaml uvicorn simulator.api.main:app --port 8000
-```
-
----
-
-### Browser UI (Phase 8b)
-
-The React frontend at `http://localhost:8080` (Docker) or `http://localhost:5173` (dev) has six pages:
-
-#### Dashboard (`/`)
-
-The live run monitor. Opens a WebSocket connection to `/api/run/stream` and updates every second without polling. Shows:
-
-- **Status pill** — running / stopping / idle with a pulsing green indicator
-- **Four stat cards** — active agents, sessions completed (with error count), elapsed time, total cost in USD
-- **Three rolling mini-charts** — sessions completed over time, session errors over time, cumulative cost over time (last 60 data points)
-- **Start / Stop button** — starts or stops the simulation directly from the dashboard
-- **Quick links** — one-click to Jaeger, Grafana, Prometheus
-
-#### Profiles (`/profiles`)
-
-A table of all configured agent profiles showing model, tool count, custom attribute count, behavioral signal count, mix weight, and failure rate. Each row has Edit, Delete (with a confirm modal), and Duplicate actions. A **+ New Profile** button opens the creation wizard.
-
-#### Profile Editor (`/profiles/:name` and `/profiles/new`)
-
-A five-tab form editor for a single agent profile. Changes are held in local draft state until you click **Save Profile**, at which point they are written to `config/default.yaml` via the API.
-
-- **Basic tab** — profile name (for new profiles), LLM model (dropdown populated from the live pricing table), mix weight slider (0–10), failure rate slider (0–50%), and a comma-separated tool list.
-
-- **Distributions tab** — controls for the four statistical distributions that drive span timing and token counts. Each Gaussian field (LLM input tokens, LLM output tokens, planning latency) shows a live bell-curve preview chart that updates as you type. The uniform integer field (tool call count) shows a flat-bar range preview.
-
-- **Observability Attributes tab** — an editable table of custom span attributes, grouped by span type (session / tool / inference). Each row has an OTel-style attribute name, a type selector (float / int / enum / boolean), and type-appropriate config fields (min/max for numeric, comma-separated values for enum, probability for boolean). Rows can be added and removed freely.
-
-- **Behavioral Signals tab** — toggle cards for each supported signal. Disabled signals are greyed out and contribute nothing to the config; enabling one expands its configuration fields (span type, probability, mean/std, and a target model field for model_switch). Signals covered: tool selection quality, goal drift, model switch, planning quality, retry reason, replanning triggered, sandbox escalation.
-
-- **YAML Preview tab** — a read-only CodeMirror editor showing the exact YAML that will be written for this profile. Includes **Copy** and **Download** buttons. Updates live as you edit the other tabs so you can verify the YAML before saving.
-
-#### Config Editor (`/config`)
-
-A full-page CodeMirror editor for `config/default.yaml` with YAML syntax highlighting. Buttons:
-
-- **Validate** — sends the current editor contents to `POST /api/config/validate` and displays any Pydantic validation errors in a red panel below the editor. Errors include field path and message.
-- **Save** — validates first, then writes to disk via `PUT /api/config`. Invalidates the profiles and pricing caches so the rest of the UI reflects the new content immediately.
-- **Reset** — restores the editor to the last saved version from the server (discards unsaved changes).
-- **Download** — saves the current editor content as `default.yaml` to your local machine.
-
-#### Run Controller (`/run`)
-
-Lets you override run parameters for a single run without editing the config file:
-
-- **Duration** — override `run_duration_seconds` for this run only
-- **Concurrency** — override the number of parallel agent sessions
-- **Single Profile** — run only one named profile (dropdown populated from the profiles list)
-
-Start and Stop buttons trigger `POST /api/run/start` and `POST /api/run/stop`. A **live log tail** at the bottom of the page shows the last 50 status lines, updated in real time via WebSocket, scrolling automatically as new lines arrive.
-
-#### Pricing Table (`/pricing`)
-
-An editable spreadsheet-style table of all models and their per-million-token prices. Supports all five price fields: input, output, cached input (OpenAI), cache write (Anthropic), and cache read (Anthropic). Rows can be added (to introduce new models) and removed. Changes are written to `config/default.yaml` via `PUT /api/pricing` when you click **Save**.
-
----
-
-### Architecture
-
-```
-Browser
-  │  HTTP / WebSocket  (port 8080 in Docker, 5173 in dev)
-  ▼
-nginx  ──/api/──►  FastAPI (simulator-api, port 8000)
-                        │
-                        ├── reads/writes  config/default.yaml  (volume)
-                        │
-                        └── on /api/run/start:
-                             runs simulator engine in-process (asyncio task)
-                                  │
-                                  └── OTLP/gRPC ──► otel-collector:4317
-                                                         │
-                                                    jaeger + prometheus
-```
-
-The FastAPI process runs the simulator engine as an `asyncio` background task in the same event loop as uvicorn — no separate subprocess, no threads. The WebSocket stream pushes one JSON frame per second containing the same fields as the REST status endpoint.
-
-Inside Docker, nginx proxies all `/api` requests (including WebSocket upgrades) from the UI container to the API container over the internal Docker bridge network. The API container overrides the OTLP exporter endpoint to `http://otel-collector:4317` via the `SIMULATOR_OTLP_ENDPOINT` environment variable, so spans reach the collector without any config file changes.
 
 ---
 
@@ -811,9 +613,6 @@ rate(agent_behavior_goal_drifts_total[5m])
 | 5 — Digital Twin Validation | `agent-simulator-schema` generates YAML profiles from real OTel exports; `agent-simulator-validate` compares shapes and produces gap reports; pre-built schemas for 5 frameworks |
 | 6 — Production Hardening | 200-agent concurrency target, Prometheus + Grafana added to Docker stack, 5 pre-built Grafana dashboards provisioned automatically |
 | 7 — Productionisation | `agent-simulator` CLI with `--dry-run`, `--profile`, `--duration`, `--concurrency`; human-readable config errors; auth headers with `${ENV_VAR}` syntax; TLS support; `Dockerfile`; `docker-compose.full.yml`; `docs/` |
-| 8a — REST + WebSocket API | FastAPI backend at port 8000; full CRUD for profiles, config, and pricing; `POST /api/run/start\|stop`, `GET /api/run/status`, `WS /api/run/stream`; thread-safe config manager with automatic backups; Pydantic request/response models |
-| 8b — React Frontend | React 18 + TypeScript + Tailwind + Vite UI at port 5173 (dev) / 8080 (Docker); Dashboard with WebSocket live stats and Recharts mini-charts; five-tab Profile Editor (Basic, Distributions with live bell-curve previews, Observability Attributes, Behavioral Signals, YAML Preview); CodeMirror 6 YAML editor with syntax highlighting and inline validation; Run Controller with log tail; editable Pricing Table |
-| 8c — Docker Integration | Multi-stage `Dockerfile.ui` (node build → nginx serve); `simulator-api` and `simulator-ui` services added to `docker/docker-compose.yml`; nginx proxies REST + WebSocket traffic from port 8080 to the API container; `config/` mounted as a volume so profile edits persist on disk; `SIMULATOR_OTLP_ENDPOINT` env var routes spans to the collector over the Docker bridge network |
 
 ---
 
@@ -829,10 +628,4 @@ pytest
 
 ## Stack
 
-**Backend:** Python asyncio · FastAPI · uvicorn · websockets · opentelemetry-sdk · OTLP/gRPC · Pydantic v2 · NumPy · PyYAML
-
-**Frontend:** React 18 · TypeScript · Tailwind CSS · Vite · React Router 6 · React Query (TanStack) · Recharts · CodeMirror 6
-
-**Observability stack:** OTel Collector · Jaeger · Prometheus · Grafana
-
-**Tooling:** pytest · pytest-asyncio · Docker Compose · nginx · hatchling
+Python asyncio · opentelemetry-sdk · OTLP/gRPC · OTel Collector · Jaeger · Prometheus · Grafana · Pydantic v2 · NumPy · pytest-asyncio · Docker Compose

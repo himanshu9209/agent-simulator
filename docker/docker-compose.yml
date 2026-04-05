@@ -1,16 +1,26 @@
 # Agent Simulator — Docker Compose stack.
-# Services: OTel Collector + Jaeger + Prometheus + Grafana
+#
+# Phases 1-7 services: OTel Collector + Jaeger + Prometheus + Grafana
+# Phase 8c  services: simulator-api (FastAPI) + simulator-ui (React/nginx)
 #
 # Usage (from project root):
 #   docker compose -f docker/docker-compose.yml up -d
 #   docker compose -f docker/docker-compose.yml logs -f
 #
-# Jaeger UI:    http://localhost:16686
-# Prometheus:   http://localhost:9090
-# Grafana:      http://localhost:3000  (anonymous, no login required)
-# OTLP/gRPC:   localhost:4317  (simulator → collector)
+# Jaeger UI:         http://localhost:16686
+# Prometheus:        http://localhost:9090
+# Grafana:           http://localhost:3000  (anonymous, no login required)
+# Agent Sim UI:      http://localhost:8080
+# Agent Sim API:     http://localhost:8000
+# OTLP/gRPC:        localhost:4317  (simulator → collector)
+#
+# All paths in build.context and volumes are relative to this file's
+# location (docker/), so ".." refers to the project root.
 
 services:
+
+  # ── Observability stack (Phases 1-7, unchanged) ─────────────────────────
+
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: agent-sim-jaeger
@@ -59,4 +69,46 @@ services:
       - "3000:3000"   # Grafana UI
     depends_on:
       - prometheus
+    restart: unless-stopped
+
+  # ── Web UI services (Phase 8c) ───────────────────────────────────────────
+
+  simulator-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: agent-sim-api
+    command:
+      - uvicorn
+      - simulator.api.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+    environment:
+      # Override the OTLP endpoint so the in-process simulator can reach the
+      # otel-collector container over the Docker bridge network instead of
+      # trying localhost:4317 (which is the default in config/default.yaml).
+      - SIMULATOR_OTLP_ENDPOINT=http://otel-collector:4317
+      # Path is relative to /app (the Dockerfile WORKDIR)
+      - SIMULATOR_CONFIG_PATH=config/default.yaml
+    volumes:
+      # Mount the config directory so profile edits persist on the host and
+      # survive container restarts.  Read-write intentionally.
+      - ../config:/app/config
+    ports:
+      - "8000:8000"
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+
+  simulator-ui:
+    build:
+      context: ..
+      dockerfile: Dockerfile.ui
+    container_name: agent-sim-ui
+    ports:
+      - "8080:8080"
+    depends_on:
+      - simulator-api
     restart: unless-stopped
